@@ -35,6 +35,11 @@
                 window.VizBar.draw(p, manager, ai, progress);
                 return;
             }
+            if (ai === 8) {
+                window.VizCherry.draw(p, manager, ai, progress);
+                return;
+            }
+        
         }
     };
 })();
