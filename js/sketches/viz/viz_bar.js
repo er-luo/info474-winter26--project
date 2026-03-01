@@ -270,12 +270,12 @@
   
               } catch (e) {
                 loadError = e;
-                console.log("❌ processing failed:", e);
+                console.log("processing failed:", e);
               }
             },
             (err) => {
               loadError = err || {};
-              console.log("❌ data load failed:", err);
+              console.log("data load failed:", err);
             }
           );
         }
