@@ -24,6 +24,11 @@
                 window.VizTitle?.draw?.(p, manager, ai, progress);
                 return;
               }
+
+              if (ai === 4) {
+                window.VizCounts.draw(p, manager, ai, progress);
+                return;
+              }
           
               if (ai >= 4 && ai < 7) {
                 window.VizScatter?.draw?.(p, manager, ai, progress);
