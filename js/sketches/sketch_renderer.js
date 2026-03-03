@@ -19,27 +19,36 @@
         },
 
         draw: function (p, manager, ai, progress) {
-            try { console.log('Renderer: delegating draw, ai=', ai); } catch (e) { }
-
-            if (ai === 0 || ai === 1) {
-                window.VizTitle.draw(p, manager, ai, progress);
+            try {
+              if (ai === 0 || ai === 1) {
+                window.VizTitle?.draw?.(p, manager, ai, progress);
                 return;
-            }
-
-            if (ai >= 4 && ai < 7) {
-                window.VizScatter.draw(p, manager, ai, progress);
+              }
+          
+              if (ai >= 4 && ai < 7) {
+                window.VizScatter?.draw?.(p, manager, ai, progress);
                 return;
-            }
-
-            if (ai === 7) {
-                window.VizBar.draw(p, manager, ai, progress);
+              }
+          
+              if (ai === 7) {
+                window.VizBar?.draw?.(p, manager, ai, progress);
                 return;
-            }
-            if (ai === 8) {
-                window.VizCherry.draw(p, manager, ai, progress);
+              }
+          
+              if (ai === 8) {
+                window.VizCherry?.draw?.(p, manager, ai, progress);
                 return;
+              }
+            } catch (e) {
+              console.error("Renderer draw error:", e);
+              // Keep p5 alive even if one viz crashes
+              p.push();
+              p.fill(30);
+              p.textSize(14);
+              p.textAlign(p.LEFT, p.TOP);
+              p.text("Visualization error (check console).", 20, 20);
+              p.pop();
             }
-        
-        }
+          }
     };
 })();
