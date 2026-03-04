@@ -30,8 +30,13 @@
                 return;
               }
           
-              if (ai >= 4 && ai < 7) {
+              if (ai >= 4 && ai < 6) {
                 window.VizCherryTimeline?.draw?.(p, manager, ai, progress);
+                return;
+              }
+
+              if (ai === 6) {
+                window.VizCherryCycle?.draw?.(p, manager, ai, progress);
                 return;
               }
           

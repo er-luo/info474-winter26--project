@@ -108,21 +108,20 @@
     },
 
     attach: function (p, manager, overrides) {
-      const self = this;
-      self.p = p;
-      self.manager = manager;
-      self.state = {
-        bloomData: [],
-        milestones: []
-      };
-      self.CFG = Object.assign({}, self.CFG, overrides || {});
-      self.state.bloomData = (self.CFG.bloomData || []).map(d => ({ year: d.year, doy: d.doy }));
-      self.state.milestones = (self.CFG.milestones || []).map(m => Object.assign({}, m));
+      this.p = p;
+      this.manager = manager;
 
-      self._addLateBloomIfValid();
-      self._ensureBloomMilestoneSpacing();
+      this.state = { bloomData: [], milestones: [] };
+      this.CFG = Object.assign({}, this.CFG, overrides || {});
 
-      return self;
+      this.state.bloomData = (this.CFG.bloomData || []).map(d => ({ year: d.year, doy: d.doy }));
+      this.state.milestones = (this.CFG.milestones || []).map(m => Object.assign({}, m));
+
+      this._addLateBloomIfValid();
+      this._ensureBloomMilestoneSpacing();
+
+      this._inited = true;
+      return this;
     },
 
     setup: function () {
@@ -132,27 +131,36 @@
       const w = (m && m.width) ? m.width : 980;
       const h = (m && m.height) ? m.height : 560;
 
-      p.createCanvas(w, h);
+      if (!p._renderer) p.createCanvas(w, h);
       p.textFont("system-ui");
     },
 
     resize: function () {
       const p = this.p;
       const m = this.manager;
-      const w = (m && m.width) ? m.width : p.width;
-      const h = (m && m.height) ? m.height : p.height;
+
+      if (!p || !p._renderer) return;
+
+      const w = (m && typeof m.width === "number") ? m.width : p.width;
+      const h = (m && typeof m.height === "number") ? m.height : p.height;
+
       if (w !== p.width || h !== p.height) p.resizeCanvas(w, h);
     },
 
-    draw: function () {
-      const p = this.p;
+    draw: function (p, manager, ai, progress) {
+      if (p) this.p = p;
+      if (manager) this.manager = manager;
+
+      if (!this._inited || !this.state) {
+        this.attach(this.p, this.manager, {});
+      }
+
       const cfg = this.CFG;
-      const m = this.manager;
 
       this.resize();
 
-      const W = p.width;
-      const H = p.height;
+      const W = this.p.width;
+      const H = this.p.height;
 
       const padL = cfg.margin.left;
       const padR = cfg.margin.right;
@@ -168,42 +176,45 @@
       const plotTop = timelineY + cfg.bloomPlotTopGap;
       const plotH = cfg.bloomPlotH;
 
-      p.background(248);
+      this.p.background(248);
 
-      p.fill(18);
-      p.noStroke();
-      p.textSize(20);
-      p.text(cfg.title, x0, 34);
+      this.p.fill(18);
+      this.p.noStroke();
+      this.p.textSize(20);
+      this.p.text(cfg.title, x0, 34);
 
-      p.fill(80);
-      p.textSize(12);
-      p.text(cfg.subtitle, x0, 54);
+      this.p.fill(80);
+      this.p.textSize(12);
+      this.p.text(cfg.subtitle, x0, 54);
 
       this._drawSeasonBand(x0, timelineY - bandH / 2, w, bandH);
       this._drawTimelineAxis(x0, timelineY, w);
 
-      const inXRange = p.mouseX >= x0 && p.mouseX <= x0 + w;
-      const doyUnderCursor = inXRange ? this._doyFromX(p.mouseX, x0, w) : null;
+      const inXRange = this.p.mouseX >= x0 && this.p.mouseX <= x0 + w;
+      const doyUnderCursor = inXRange ? this._doyFromX(this.p.mouseX, x0, w) : null;
 
       const activeMs = doyUnderCursor != null ? this._nearestMilestone(doyUnderCursor) : null;
       this._drawMilestonesSelective(x0, timelineY, w, activeMs);
 
       const bloomHover = this._drawBloomPlot(x0, plotTop, w, plotH);
 
-      const inspector = this._getInspectorTarget(x0, timelineY, w, plotTop, plotH, activeMs, bloomHover, doyUnderCursor);
+      const inspector = this._getInspectorTarget(
+        x0, timelineY, w, plotTop, plotH,
+        activeMs, bloomHover, doyUnderCursor
+      );
 
       if (inspector) {
         this._drawInspectorMarker(inspector);
-        this._drawTooltipAt(p.mouseX, p.mouseY, inspector.title, inspector.body);
-        p.cursor(p.CROSS);
+        this._drawTooltipAt(this.p.mouseX, this.p.mouseY, inspector.title, inspector.body);
+        this.p.cursor(this.p.CROSS);
       } else {
-        p.cursor(p.ARROW);
+        this.p.cursor(this.p.ARROW);
       }
 
-      p.noStroke();
-      p.fill(90);
-      p.textSize(11);
-      p.text("Replace bloomData[] with your real series. Milestones are placeholders.", x0, H - 22);
+      this.p.noStroke();
+      this.p.fill(90);
+      this.p.textSize(11);
+      this.p.text("Replace bloomData[] with your real series. Milestones are placeholders.", x0, H - 22);
     },
 
     _addLateBloomIfValid: function () {
@@ -693,24 +704,8 @@
         d -= cfg.monthLengths[m];
         m++;
       }
-      const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       return `${names[m]} ${d}`;
     }
   };
-
-  window.registerSketch = window.registerSketch || function (id, factory) {
-    window.__SKETCH_FACTORIES__ = window.__SKETCH_FACTORIES__ || {};
-    window.__SKETCH_FACTORIES__[id] = factory;
-  };
-
-  window.registerSketch("cherry_cycle", function (manager, overrides) {
-    const viz = Object.create(window.VizCherryCycle).attach(null, manager, overrides);
-
-    return new p5(function (p) {
-      viz.p = p;
-      p.setup = function () { viz.setup(); };
-      p.draw = function () { viz.draw(); };
-      p.windowResized = function () { viz.resize(); };
-    }, manager && manager.container ? manager.container : undefined);
-  });
 })();
