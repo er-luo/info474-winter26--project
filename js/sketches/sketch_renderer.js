@@ -31,7 +31,7 @@
               }
           
               if (ai >= 4 && ai < 7) {
-                window.VizScatter?.draw?.(p, manager, ai, progress);
+                window.VizCherryTimeline?.draw?.(p, manager, ai, progress);
                 return;
               }
           
