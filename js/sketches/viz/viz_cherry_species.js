@@ -1,178 +1,171 @@
 // viz_cherry_species.js
-// cherry blossom species visualization
+// Cherry blossom species tree with counts
 
-let sdotTable;
-let uwTable;
+(function () {
 
-let speciesCounts = {};
-let speciesList = [];
+  let sdotTable = null;
+  let uwTable = null;
 
-function preload(){
+  let speciesCounts = {};
+  let speciesList = [];
 
-  sdotTable = loadTable(
-    "SDOT_Trees_data.csv",
-    "csv",
-    "header"
-  );
+  let loadingStarted = false;
 
-  uwTable = loadTable(
-    "Maust_et_al_data/blossom_dates.csv",
-    "csv",
-    "header"
-  );
+  function processSDOT() {
 
-}
+    for (let i = 0; i < sdotTable.getRowCount(); i++) {
 
-function setup(){
+      const genus = sdotTable.getString(i, "GENUS");
+      const common = (sdotTable.getString(i, "COMMON_NAME") || "").toLowerCase();
 
-  createCanvas(700,700);
-  angleMode(RADIANS);
-  textFont("sans-serif");
+      if (genus === "Prunus" && common.includes("cherry")) {
 
-  processSDOT();
-  processUW();
+        let species = sdotTable.getString(i, "SCIENTIFIC_NAME");
 
-  speciesList = Object.keys(speciesCounts);
+        if (!species) species = common;
 
-}
+        if (!speciesCounts[species]) speciesCounts[species] = 0;
 
-function processSDOT(){
-
-  for(let i=0;i<sdotTable.getRowCount();i++){
-
-    const genus = sdotTable.getString(i,"GENUS");
-    const common = (sdotTable.getString(i,"COMMON_NAME")||"").toLowerCase();
-
-    if(genus === "Prunus" && common.includes("cherry")){
-
-      let species = sdotTable.getString(i,"SCIENTIFIC_NAME");
-
-      if(!species){
-        species = common;
+        speciesCounts[species]++;
       }
-
-      if(!speciesCounts[species]){
-        speciesCounts[species] = 0;
-      }
-
-      speciesCounts[species]++;
-
     }
   }
-}
 
-function processUW(){
+  function processUW() {
 
-  let seenSpecies = {};
+    let seenSpecies = {};
 
-  for(let i=0;i<uwTable.getRowCount();i++){
+    for (let i = 0; i < uwTable.getRowCount(); i++) {
 
-    let plant = uwTable.getString(i,"PLANT");
+      let plant = uwTable.getString(i, "PLANT");
+      let match = plant.match(/\((.*?)\)/);
 
-    let match = plant.match(/\((.*?)\)/);
+      if (match) {
 
-    if(match){
+        let species = match[1];
 
-      let species = match[1];
+        if (!seenSpecies[species]) {
 
-      if(!seenSpecies[species]){
+          seenSpecies[species] = true;
 
-        seenSpecies[species] = true;
+          if (!speciesCounts[species]) speciesCounts[species] = 0;
 
-        if(!speciesCounts[species]){
-          speciesCounts[species] = 0;
+          speciesCounts[species] += 30; // approx UW grove
         }
-
-        speciesCounts[species] += 30; 
-        // approximate UW Quad grove size
       }
     }
   }
-}
 
-function draw(){
+  window.VizCherrySpecies = {
 
-  background(252,248,250);
+    draw: function (p, manager) {
 
-  translate(width/2,height/2);
+      const left = manager.offsetX || 20;
+      const top = manager.offsetY || 0;
+      const W = manager.width || 600;
+      const H = manager.height || 520;
 
-  drawRoot();
-  drawBranches();
+      // ---------- LOAD DATA ONCE ----------
+      if (!loadingStarted) {
 
-}
+        loadingStarted = true;
 
-function drawRoot(){
+        sdotTable = p.loadTable(
+          "data/SDOT_Trees_data.csv",
+          "csv",
+          "header",
+          () => {
 
-  fill(120,80,100);
-  noStroke();
-  circle(0,0,40);
+            uwTable = p.loadTable(
+              "data/Maust_et_al_data/blossom_dates.csv",
+              "csv",
+              "header",
+              () => {
 
-  fill(40);
-  textAlign(CENTER);
-  textSize(16);
-  text("Prunus",0,5);
+                processSDOT();
+                processUW();
 
-}
+                speciesList = Object.keys(speciesCounts);
 
-function drawBranches(){
+                // sort by abundance
+                speciesList.sort((a, b) => speciesCounts[b] - speciesCounts[a]);
+              }
+            );
 
-  let radius = 200;
+          }
+        );
+      }
 
-  let maxCount = max(Object.values(speciesCounts));
+      p.push();
 
-  for(let i=0;i<speciesList.length;i++){
+      p.background(252,248,250);
 
-    let species = speciesList[i];
-    let count = speciesCounts[species];
+      if (speciesList.length === 0) {
 
-    let angle = map(
-      i,
-      0,
-      speciesList.length,
-      0,
-      TWO_PI
-    );
+        p.fill(40);
+        p.textAlign(p.CENTER);
+        p.text("Loading species data...", W/2, H/2);
 
-    let x = cos(angle)*radius;
-    let y = sin(angle)*radius;
+        p.pop();
+        return;
+      }
 
-    stroke(170,140,150);
-    strokeWeight(map(count,0,maxCount,1,6));
-    line(0,0,x,y);
+      drawTree(p, left + 60, top + 80, W, H);
 
-    drawBlossomCluster(x,y,count,maxCount);
+      p.pop();
+    }
+  };
 
-    noStroke();
-    fill(50);
-    textSize(11);
-    textAlign(CENTER);
+  function drawTree(p, startX, startY, W, H) {
 
-    push();
-    translate(x*1.15,y*1.15);
-    rotate(angle);
-    text(species,0,0);
-    pop();
+    let trunkHeight = H - 160;
 
+    // trunk
+    p.stroke(120,90,100);
+    p.strokeWeight(4);
+    p.line(startX, startY, startX, startY + trunkHeight);
+
+    // root label
+    p.noStroke();
+    p.fill(40);
+    p.textSize(18);
+    p.textAlign(p.LEFT);
+    p.text("Prunus (Cherry Trees)", startX - 10, startY - 25);
+
+    let spacing = trunkHeight / speciesList.length;
+
+    let maxCount = Math.max(...Object.values(speciesCounts));
+
+    for (let i = 0; i < speciesList.length; i++) {
+
+      let species = speciesList[i];
+      let count = speciesCounts[species];
+
+      let y = startY + spacing * i;
+
+      let branchLength = p.map(count, 0, maxCount, 120, 320);
+
+      // branch
+      p.stroke(170,140,150);
+      p.strokeWeight(p.map(count,0,maxCount,1,6));
+      p.line(startX, y, startX + branchLength, y);
+
+      // blossom node
+      p.noStroke();
+      p.fill(240,160,195);
+      p.circle(startX + branchLength, y, 10);
+
+      // label
+      p.fill(50);
+      p.textSize(12);
+      p.textAlign(p.LEFT);
+
+      p.text(
+        species + "  (" + count + ")",
+        startX + branchLength + 12,
+        y + 4
+      );
+    }
   }
 
-}
-
-function drawBlossomCluster(x,y,count,maxCount){
-
-  let petals = map(count,0,maxCount,3,20);
-
-  for(let i=0;i<petals;i++){
-
-    let angle = random(TWO_PI);
-    let r = random(12);
-
-    let px = x + cos(angle)*r;
-    let py = y + sin(angle)*r;
-
-    fill(240,160,195,200);
-    noStroke();
-    circle(px,py,6);
-
-  }
-
-}
+})();
