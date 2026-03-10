@@ -19,6 +19,10 @@
         },
 
         draw: function (p, manager, ai, progress) {
+
+          console.log("active index:", ai);
+           p.clear();
+
             try {
               if (ai === 0 || ai === 1) {
                 window.VizTitle?.draw?.(p, manager, ai, progress);
@@ -30,7 +34,7 @@
                 return;
               }
           
-              if (ai >= 4 && ai < 6) {
+              if (ai === 5) {
                 window.VizCherryTimeline?.draw?.(p, manager, ai, progress);
                 return;
               }
@@ -47,6 +51,11 @@
           
               if (ai === 8) {
                 window.VizCherry?.draw?.(p, manager, ai, progress);
+                return;
+              }
+
+              if (ai === 9) {
+                window.VizCherrySpecies?.draw?.(p, manager, ai, progress);
                 return;
               }
             } catch (e) {
