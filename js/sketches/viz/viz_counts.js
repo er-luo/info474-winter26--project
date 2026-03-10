@@ -51,9 +51,10 @@
     if (genus !== "prunus") return null;
 
     const cherryLike =
-      commonName.includes("cherry") ||
-      commonName.includes("sakura") ||
-      commonName.includes("flowering cherry");
+    commonName.includes("cherry") ||
+    commonName.includes("sakura") ||
+    commonName.includes("flowering") ||
+    commonName.includes("prunus");
 
     if (!cherryLike) return null;
 
@@ -233,15 +234,27 @@
 
       // FIXED PROGRESS MATH:
       const n = AREA_CONFIG.length;
-      const t = clamp01(progress || 0);
-      const scaled = t * (n - 1);
-      const idx = Math.min(Math.floor(scaled), n - 1);
-      const localT = (idx === n - 1) ? 1 : (scaled - idx);
+      const t = clamp01(progress == null ? 0 : progress);
+      
+      // map progress across all areas
+      let scaled = t * n;
+      let idx = Math.min(Math.floor(scaled), n - 1);
+      
+      // local progress inside the current area
+      let localT = scaled - idx;
+      
+      // make first and last areas visible immediately / fully
+      if (idx === 0 && t === 0) localT = 1;
+      if (idx === n - 1) localT = 1;
+      
       const grow = easeOutCubic(localT);
 
       const area = AREA_CONFIG[idx];
       const maxVisualBlossoms = Math.min(area.count, area.blossoms.length);
-      const blossomsToDraw = Math.round(maxVisualBlossoms * grow);
+      const blossomsToDraw = Math.max(
+        8,
+        Math.round(maxVisualBlossoms * grow)
+      );
 
       // Panel
       p.fill(255);
