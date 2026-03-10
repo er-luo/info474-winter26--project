@@ -1,5 +1,5 @@
 // viz_cherry_timeline.js
-// Scroll-driven Cherry Blossom Planting Timeline Map
+// Interactive Cherry Blossom Planting Timeline Map (NO SCROLL)
 
 (function () {
 
@@ -9,9 +9,12 @@
 
   let points = [];
   let bounds = null;
+
   let minYear = 9999;
   let maxYear = 0;
-  let activeCount = 0;
+  let currentYear = null;
+
+  let draggingTimeline = false;
 
   function computeBounds(pts) {
     let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
@@ -43,9 +46,7 @@
 
   window.VizCherryTimeline = {
 
-    draw: function (p, manager, ai, progress) {
-    
-        console.log("Timeline draw running");
+    draw: function (p, manager) {
 
       p.push();
 
@@ -58,7 +59,14 @@
         x: left,
         y: top + 50,
         w: Math.max(300, W - 40),
-        h: Math.max(260, H - 90)
+        h: Math.max(260, H - 130)
+      };
+
+      const timeline = {
+        x: panel.x,
+        y: panel.y + panel.h + 40,
+        w: panel.w,
+        h: 40
       };
 
       p.noStroke();
@@ -69,9 +77,9 @@
 
       p.fill(70);
       p.textSize(11);
-      p.text("Scroll to move forward in time.", left, top + 28);
+      p.text("Drag the timeline to travel through time.", left, top + 28);
 
-      // ---------- LOAD ONCE ----------
+      // ---------- LOAD DATA ----------
       if (!loadingStarted) {
         loadingStarted = true;
 
@@ -80,67 +88,56 @@
           "csv",
           "header",
           () => {
-            try {
 
-              points = [];
-              minYear = 9999;
-              maxYear = 0;
+            points = [];
+            minYear = 9999;
+            maxYear = 0;
 
-              for (let i = 0; i < table.getRowCount(); i++) {
+            for (let i = 0; i < table.getRowCount(); i++) {
 
-                const genus = (table.getString(i, "GENUS") || "").trim().toLowerCase();
-                const name  = (table.getString(i, "COMMON_NAME") || "").trim().toLowerCase();
-                const lat   = table.getNum(i, "SHAPE_LAT");
-                const lng   = table.getNum(i, "SHAPE_LNG");
-                const plantedDate = table.getString(i, "PLANTED_DATE");
+              const genus = (table.getString(i, "GENUS") || "").trim().toLowerCase();
+              const name  = (table.getString(i, "COMMON_NAME") || "").trim().toLowerCase();
+              const lat   = table.getNum(i, "SHAPE_LAT");
+              const lng   = table.getNum(i, "SHAPE_LNG");
+              const plantedDate = table.getString(i, "PLANTED_DATE");
 
-                let year = NaN;
-                if (plantedDate) {
-                  year = new Date(plantedDate).getFullYear();
-                  if (i < 10) {
-                    console.log("Date raw:", plantedDate);
-                    }
-                }
-
-                if (
-                  genus === "prunus" &&
-                  name.includes("cherry") &&
-                  isFinite(lat) &&
-                  isFinite(lng) &&
-                  isFinite(year)
-                ) {
-                  points.push({ lat, lng, year, size: 0 });
-                  if (year < minYear) minYear = year;
-                  if (year > maxYear) maxYear = year;
-                }
+              let year = NaN;
+              if (plantedDate) {
+                year = new Date(plantedDate).getFullYear();
               }
 
-              points.sort((a, b) => a.year - b.year);
-              bounds = padBounds(computeBounds(points), 0.03);
+              if (
+                genus === "prunus" &&
+                name.includes("cherry") &&
+                isFinite(lat) &&
+                isFinite(lng) &&
+                isFinite(year)
+              ) {
+                points.push({ lat, lng, year, size: 0 });
 
-            } catch (e) {
-              loadError = e;
-              console.log("processing failed:", e);
+                if (year < minYear) minYear = year;
+                if (year > maxYear) maxYear = year;
+              }
             }
-          },
-          (err) => {
-            loadError = err || {};
-            console.log("data load failed:", err);
+
+            points.sort((a, b) => a.year - b.year);
+            bounds = padBounds(computeBounds(points), 0.03);
+            currentYear = minYear;
           }
         );
       }
 
       if (!bounds || points.length === 0) {
+
         p.noStroke();
         p.fill(255);
         p.rect(panel.x, panel.y, panel.w, panel.h, 14);
 
         p.fill(40);
         p.textSize(14);
-        p.textAlign(p.LEFT, p.TOP);
 
         if (loadError) {
-          p.text("Could not load the tree dataset.", panel.x + 16, panel.y + 16);
+          p.text("Could not load tree dataset.", panel.x + 16, panel.y + 16);
         } else {
           p.text("Loading tree data…", panel.x + 16, panel.y + 16);
         }
@@ -149,21 +146,37 @@
         return;
       }
 
-      const currentYear = Math.floor(
-        p.map(progress, 0, 1, minYear, maxYear)
-      );
+      // ---------- TIMELINE INTERACTION ----------
 
-      while (
-        activeCount < points.length &&
-        points[activeCount].year <= currentYear
-      ) {
-        activeCount++;
+      if (p.mouseIsPressed) {
+
+        if (
+          p.mouseX > timeline.x &&
+          p.mouseX < timeline.x + timeline.w &&
+          p.mouseY > timeline.y - 10 &&
+          p.mouseY < timeline.y + 20
+        ) {
+          draggingTimeline = true;
+        }
+
+      } else {
+        draggingTimeline = false;
       }
 
-      if (activeCount > 0 && points[activeCount - 1].year > currentYear) {
-        activeCount = 0;
-        for (let pt of points) pt.size = 0;
+      if (draggingTimeline) {
+
+        let t = p.constrain(
+          (p.mouseX - timeline.x) / timeline.w,
+          0,
+          1
+        );
+
+        currentYear = Math.floor(
+          p.lerp(minYear, maxYear, t)
+        );
       }
+
+      // ---------- MAP PANEL ----------
 
       p.noStroke();
       p.fill(255);
@@ -182,25 +195,79 @@
         p.line(panel.x, gy, panel.x + panel.w, gy);
       }
 
+      // ---------- DRAW TREES ----------
+
       p.noStroke();
 
-      for (let i = 0; i < activeCount; i++) {
-        const pt = points[i];
-        const pos = latLngToPanelXY(p, panel, pt.lat, pt.lng);
+      let activeCount = 0;
 
-        pt.size = p.lerp(pt.size, 4, 0.15);
+      for (let pt of points) {
 
-        const age = currentYear - pt.year;
-        const alpha = p.map(age, 0, 40, 220, 90);
+        if (pt.year <= currentYear) {
 
-        p.fill(240, 160, 195, alpha);
-        p.circle(pos.x, pos.y, pt.size);
+          const pos = latLngToPanelXY(p, panel, pt.lat, pt.lng);
+
+          pt.size = p.lerp(pt.size, 4, 0.15);
+
+          const age = currentYear - pt.year;
+          const alpha = p.map(age, 0, 40, 220, 90);
+
+          p.fill(240, 160, 195, alpha);
+          p.circle(pos.x, pos.y, pt.size);
+
+          activeCount++;
+
+        } else {
+          pt.size = 0;
+        }
       }
+
+      // ---------- YEAR LABEL ----------
 
       p.fill(40);
       p.textSize(28);
       p.textAlign(p.RIGHT, p.TOP);
       p.text(currentYear, panel.x + panel.w, top + 8);
+
+      // ---------- TIMELINE BAR ----------
+
+      p.stroke(200);
+      p.strokeWeight(3);
+      p.line(timeline.x, timeline.y, timeline.x + timeline.w, timeline.y);
+
+      // timeline ticks
+
+      p.strokeWeight(1);
+      p.fill(60);
+      p.textAlign(p.CENTER, p.TOP);
+      p.textSize(10);
+
+      let yearStep = Math.ceil((maxYear - minYear) / 10);
+
+      for (let y = minYear; y <= maxYear; y += yearStep) {
+
+        const x = p.map(y, minYear, maxYear, timeline.x, timeline.x + timeline.w);
+
+        p.stroke(160);
+        p.line(x, timeline.y - 6, x, timeline.y + 6);
+
+        p.noStroke();
+        p.text(y, x, timeline.y + 8);
+      }
+
+      // timeline handle
+
+      const handleX = p.map(
+        currentYear,
+        minYear,
+        maxYear,
+        timeline.x,
+        timeline.x + timeline.w
+      );
+
+      p.noStroke();
+      p.fill(240, 160, 195);
+      p.circle(handleX, timeline.y, 14);
 
       p.pop();
     }
