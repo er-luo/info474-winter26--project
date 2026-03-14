@@ -2,7 +2,7 @@
   const CFG = {
     csvPath: "data/Maust_et_al_data/blossom_dates.csv",
 
-    margin: { top: 10, right: 160, bottom: 50, left: 50 },
+    margin: { top: 0, right: 170, bottom: 58, left: 55 },
 
     years: [],
 
@@ -18,21 +18,22 @@
     ],
 
     monthGridEvery: 1,
-    monthGridAlpha: 22,
-    monthGridAlphaMajor: 45,
+    monthGridAlpha: 18,
+    monthGridAlphaMajor: 42,
 
     samplesPerYear: 260,
 
-    zStep: 76,
-    zDX: 0.95,
-    zDY: -0.68,
-    liftPerZ: 0.16,
+    // stronger consistent 3D stagger of the whole plane
+    zStep: 86,
+    zDX: 1.35,
+    zDY: -0.78,
+    liftPerZ: 0,
 
     ridgeMaxAmp: 110,
     ridgeStrokeAlpha: 180,
-    ridgeFillAlpha: 22,
+    ridgeFillAlpha: 20,
 
-    groundAlpha: 14,
+    groundAlpha: 12,
 
     treesPerYear: 24,
     treeSize: 12,
@@ -44,7 +45,9 @@
 
     bloomSigma: 0.22,
     targetRidgeCount: 5,
-    staggerMonthOffset: 0.38,
+
+    // removed fake month shifting
+    staggerMonthOffset: 0,
   };
 
   window.VizCherry = {
@@ -103,7 +106,7 @@
       drawTitle(p, plot);
       draw3DFrame(p, plot, cache.ridges.length, cache.zStep);
       drawMonthGridLines(p, plot, cache.ridges.length, cache.zStep);
-      drawMonthAxis(p, plot);
+      drawMonthAxis(p, plot, cache.ridges.length, cache.zStep);
       draw3DHeightAxis(p, plot, cache.ridges.length, cache.zStep);
       drawRidges3D(p, plot, cache.ridges, cache.zStep);
 
@@ -112,7 +115,11 @@
   };
 
   function ensureDataLoaded(p, manager) {
-    if (manager._cherryDataLoaded || manager._cherryDataLoading || manager._cherryLoadError) {
+    if (
+      manager._cherryDataLoaded ||
+      manager._cherryDataLoading ||
+      manager._cherryLoadError
+    ) {
       return;
     }
 
@@ -130,7 +137,12 @@
             BLOOMDAY: Number(row.get("BLOOMDAY")),
             METHOD: row.get("METHOD"),
           }))
-          .filter((d) => Number.isFinite(d.YEAR) && Number.isFinite(d.BLOOMDAY) && d.BLOOMDAY > 0)
+          .filter(
+            (d) =>
+              Number.isFinite(d.YEAR) &&
+              Number.isFinite(d.BLOOMDAY) &&
+              d.BLOOMDAY > 0
+          )
           .sort((a, b) => a.YEAR - b.YEAR);
 
         manager._cherryRows = rows;
@@ -168,26 +180,22 @@
   function getDynamicZStep(ridgeCount, plot) {
     if (ridgeCount <= 1) return CFG.zStep;
 
-    const maxDepthByWidth = plot.w * 0.22;
-    const maxDepthByHeight = plot.h * 0.18;
-    const maxDepth = Math.min(maxDepthByWidth, maxDepthByHeight, 180);
+    const maxDepthByWidth = plot.w * 0.32;
+    const maxDepthByHeight = plot.h * 0.25;
+    const maxDepth = Math.min(maxDepthByWidth, maxDepthByHeight, 250);
 
     return maxDepth / (ridgeCount - 1);
   }
 
   function regenerateRidgesFromData(rows) {
     const groupedRows = bucketRowsIntoTargetCount(rows, CFG.targetRidgeCount);
-    const n = groupedRows.length;
 
-    return groupedRows.map((group, idx) => {
+    return groupedRows.map((group) => {
       const avgBloomDay =
         group.rows.reduce((sum, d) => sum + d.BLOOMDAY, 0) / group.rows.length;
 
-      const basePeakMonth = dayOfYearToMonthFloat(avgBloomDay);
-
-      const centeredIndex = n <= 1 ? 0 : idx - (n - 1) / 2;
-      const staggeredPeakMonth = clamp(
-        basePeakMonth + centeredIndex * CFG.staggerMonthOffset,
+      const peakMonth = clamp(
+        dayOfYearToMonthFloat(avgBloomDay),
         CFG.monthMin + 0.05,
         CFG.monthMax - 0.05
       );
@@ -198,16 +206,16 @@
       const values = [];
       for (let j = 0; j < CFG.samplesPerYear; j++) {
         const m = mapN(j, 0, CFG.samplesPerYear - 1, CFG.monthMin, CFG.monthMax);
-        const v = amp * gaussian(m, staggeredPeakMonth, sigma);
+        const v = amp * gaussian(m, peakMonth, sigma);
         values.push({ m, v });
       }
 
-      const trees = buildStaticTrees(values, staggeredPeakMonth, CFG.treesPerYear, group.startYear);
+      const trees = buildStaticTrees(values, peakMonth, CFG.treesPerYear, group.startYear);
 
       return {
         year: group.label,
-        peakMonth: staggeredPeakMonth,
-        rawPeakMonth: basePeakMonth,
+        peakMonth,
+        rawPeakMonth: peakMonth,
         sigma,
         amp,
         bloomDay: avgBloomDay,
@@ -270,16 +278,19 @@
     p.textStyle(p.NORMAL);
     p.textSize(12);
     p.fill(60);
-    p.text("Real bloom-day data, averaged into 5 year-groups.", plot.x0, 62);
+    p.text("Real bloom-day data, shown on consistently staggered ridge planes.", plot.x0, 62);
   }
 
   function draw3DFrame(p, plot, ridgeCount, zStep) {
     const maxZ = Math.max(0, (ridgeCount - 1) * zStep);
 
-    const FL = proj(plot.x0, plot.y1, 0);
-    const FR = proj(plot.x1, plot.y1, 0);
-    const BL = proj(plot.x0, plot.y1, maxZ);
-    const BR = proj(plot.x1, plot.y1, maxZ);
+    const frontY = plot.y1;
+    const backY = plot.y1 - maxZ * CFG.liftPerZ;
+
+    const FL = proj(plot.x0, frontY, 0);
+    const FR = proj(plot.x1, frontY, 0);
+    const BL = proj(plot.x0, backY, maxZ);
+    const BR = proj(plot.x1, backY, maxZ);
 
     p.noStroke();
     p.fill(0, 0, 0, CFG.groundAlpha);
@@ -290,7 +301,7 @@
     p.vertex(BL.x, BL.y);
     p.endShape(p.CLOSE);
 
-    p.stroke(0, 0, 0, 50);
+    p.stroke(0, 0, 0, 48);
     p.strokeWeight(1);
     p.line(FL.x, FL.y, FR.x, FR.y);
     p.line(FL.x, FL.y, BL.x, BL.y);
@@ -299,9 +310,10 @@
 
     for (let i = 1; i < ridgeCount; i++) {
       const z = i * zStep;
-      const L = proj(plot.x0, plot.y1, z);
-      const R = proj(plot.x1, plot.y1, z);
-      p.stroke(0, 0, 0, 22);
+      const yBase = plot.y1 - z * CFG.liftPerZ;
+      const L = proj(plot.x0, yBase, z);
+      const R = proj(plot.x1, yBase, z);
+      p.stroke(0, 0, 0, 18);
       p.line(L.x, L.y, R.x, R.y);
     }
   }
@@ -313,35 +325,51 @@
       const x = monthToX(plot, m);
 
       const A = proj(x, plot.y1, 0);
-      const B = proj(x, plot.y1, maxZ);
+      const B = proj(x, plot.y1 - maxZ * CFG.liftPerZ, maxZ);
 
       const isMajor = CFG.monthTicks.some((tk) => tk.m === m);
       p.stroke(0, 0, 0, isMajor ? CFG.monthGridAlphaMajor : CFG.monthGridAlpha);
-      p.strokeWeight(isMajor ? 1.2 : 1);
+      p.strokeWeight(isMajor ? 1.15 : 1);
       p.line(A.x, A.y, B.x, B.y);
     }
   }
 
-  function drawMonthAxis(p, plot) {
-    p.stroke(0, 0, 0, 70);
+  function drawMonthAxis(p, plot, ridgeCount, zStep) {
+    const backZ = Math.max(0, (ridgeCount - 1) * zStep);
+
+    // draw front and back month axis so the whole staggered plane reads clearly
+    drawMonthAxisAtZ(p, plot, 0, true);
+    if (backZ > 0) drawMonthAxisAtZ(p, plot, backZ, false);
+  }
+
+  function drawMonthAxisAtZ(p, plot, z, showLabels) {
+    const yBase = plot.y1 - z * CFG.liftPerZ;
+
+    const left = proj(plot.x0, yBase, z);
+    const right = proj(plot.x1, yBase, z);
+
+    p.stroke(0, 0, 0, z === 0 ? 75 : 40);
     p.strokeWeight(1);
+    p.line(left.x, left.y, right.x, right.y);
 
     for (const tk of CFG.monthTicks) {
       const x = monthToX(plot, tk.m);
-      const A = proj(x, plot.y1, 0);
-      const B = proj(x, plot.y1 + 10, 0);
+      const A = proj(x, yBase, z);
+      const B = proj(x, yBase + 9, z);
+
+      p.stroke(0, 0, 0, z === 0 ? 75 : 36);
       p.line(A.x, A.y, B.x, B.y);
 
-      p.noStroke();
-      p.fill(0, 0, 0, 150);
-      p.textSize(11);
-      p.textAlign(p.CENTER, p.TOP);
-      p.text(tk.label, A.x, A.y + 12);
-      p.stroke(0, 0, 0, 70);
+      if (showLabels) {
+        p.noStroke();
+        p.fill(0, 0, 0, 155);
+        p.textSize(11);
+        p.textAlign(p.CENTER, p.TOP);
+        p.text(tk.label, B.x, B.y + 4);
+      }
     }
   }
 
-  // unchanged bloom axis placement
   function draw3DHeightAxis(p, plot, ridgeCount, zStep) {
     const maxZ = Math.max(0, (ridgeCount - 1) * zStep);
 
@@ -361,7 +389,7 @@
       p.line(base.x - 8, y, base.x, y);
 
       const guideEnd = proj(plot.x0, plot.y1 - (CFG.axisHeight * t), maxZ);
-      p.stroke(0, 0, 0, 26);
+      p.stroke(0, 0, 0, 24);
       p.line(base.x, y, guideEnd.x, guideEnd.y);
 
       p.noStroke();
@@ -384,7 +412,7 @@
     for (let i = 0; i < n; i++) {
       const ridge = ridges[i];
       const z = (n - 1 - i) * zStep;
-      const baseY = (plot.y1 - 8) - (z * CFG.liftPerZ);
+      const baseY = (plot.y1 - 3) - (z * CFG.liftPerZ);
 
       const pts = ridge.values.map((d) => {
         const x = monthToX(plot, d.m);
@@ -392,14 +420,18 @@
         return { d, p: proj(x, y, z) };
       });
 
+      const localL = proj(plot.x0, baseY, z);
+      const localR = proj(plot.x1, baseY, z);
+      p.stroke(0, 0, 0, 26);
+      p.strokeWeight(1);
+      p.line(localL.x, localL.y, localR.x, localR.y);
+
       p.noStroke();
       p.fill(0, 0, 0, CFG.ridgeFillAlpha);
       p.beginShape();
-      const leftBase = proj(plot.x0, baseY, z);
-      p.vertex(leftBase.x, leftBase.y);
+      p.vertex(localL.x, localL.y);
       for (const q of pts) p.vertex(q.p.x, q.p.y);
-      const rightBase = proj(plot.x1, baseY, z);
-      p.vertex(rightBase.x, rightBase.y);
+      p.vertex(localR.x, localR.y);
       p.endShape(p.CLOSE);
 
       p.stroke(0, 0, 0, CFG.ridgeStrokeAlpha);
@@ -409,7 +441,6 @@
       for (const q of pts) p.vertex(q.p.x, q.p.y);
       p.endShape();
 
-      // year labels moved to the right side
       const yLabelPos = proj(plot.x1, baseY, z);
       p.noStroke();
       p.fill(0, 0, 0, 165);
@@ -420,13 +451,20 @@
       const peakX = monthToX(plot, ridge.peakMonth);
       const peakApproxY = baseY - ridge.amp * 0.92;
       const pk = proj(peakX, peakApproxY, z);
-      p.stroke(0, 0, 0, 90);
+
+      p.stroke(0, 0, 0, 82);
       p.strokeWeight(1);
       p.line(pk.x, pk.y, pk.x, pk.y + 10);
+
       p.noStroke();
       p.fill(0, 0, 0, 140);
       p.circle(pk.x, pk.y, 5);
 
+      // average bloom day label
+      p.fill(0, 0, 0, 165);
+      p.textSize(11);
+      p.textAlign(p.CENTER, p.BOTTOM);
+      p.text("Day: " + Math.round(ridge.bloomDay), pk.x-10, pk.y - 10);
       drawTreesForRidge(p, plot, ridge, z, baseY);
     }
   }
@@ -544,7 +582,10 @@
   }
 
   function proj(x, y, z) {
-    return { x: x + z * CFG.zDX, y: y + z * CFG.zDY };
+    return {
+      x: x + z * CFG.zDX,
+      y: y + z * CFG.zDY
+    };
   }
 
   function monthToX(plot, m) {
