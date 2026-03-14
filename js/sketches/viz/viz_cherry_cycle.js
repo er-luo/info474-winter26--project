@@ -1,26 +1,14 @@
 (function () {
   window.VizCherryCycle = {
     CFG: {
-      margin: { top: 90, right: 130, bottom: 110, left: 40 },
+      margin: { top: 10, right: 40, bottom: 10, left: 40 },
 
       title: "Somei-yoshino cherry blossom life cycle (typical year)",
       subtitle:
-        "Move mouse to inspect. Only the selected milestone icon is shown. Avg bloom is shown at the bottom.",
+        "Move mouse to inspect. Only the selected milestone icon is shown.",
 
       bandH: 74,
       timelineYRel: 0.42,
-
-      bloomPlotH: 185,
-      bloomPlotTopGap: 55,
-
-      highlightRadius: 40,
-      avgHoverPx: 10,
-
-      dataPath: "data/Maust_et_al_data/blossom_dates.csv",
-      yearMin: 1966,
-      yearMax: 1986,
-
-      bloomData: [],
 
       milestones: [
         {
@@ -104,22 +92,12 @@
       this.p = p;
       this.manager = manager;
 
-      this.state = { bloomData: [], milestones: [] };
+      this.state = { milestones: [] };
       this.CFG = Object.assign({}, this.CFG, overrides || {});
-
-      this.state.bloomData = (this.CFG.bloomData || []).map(d => ({
-        year: d.year,
-        doy: d.doy
-      }));
 
       this.state.milestones = (this.CFG.milestones || []).map(m =>
         Object.assign({}, m)
       );
-
-      this._dataLoaded = false;
-      this._dataError = null;
-
-      this._loadBloomDataFromCSV();
 
       this._addLateBloomIfValid();
       this._ensureBloomMilestoneSpacing();
@@ -133,7 +111,7 @@
       const m = this.manager;
 
       const w = m && m.width ? m.width : 980;
-      const h = m && m.height ? m.height : 560;
+      const h = m && m.height ? m.height : 500;
 
       if (!p._renderer) p.createCanvas(w, h);
       p.textFont("system-ui");
@@ -177,10 +155,7 @@
       const timelineY = padT + (H - padT - padB) * cfg.timelineYRel;
       const bandH = cfg.bandH;
 
-      const plotTop = timelineY + cfg.bloomPlotTopGap;
-      const plotH = cfg.bloomPlotH;
-
-      this.p.background(248);
+      this.p.background(255);
 
       this.p.push();
       this.p.fill(18);
@@ -195,25 +170,28 @@
       this.p.pop();
 
       this._drawSeasonBand(x0, timelineY - bandH / 2, w, bandH);
-      this._drawTimelineAxis(x0, timelineY, w);
+      this._drawTimelineAxis(x0 + 20, timelineY, w);
 
-      const inXRange = this.p.mouseX >= x0 && this.p.mouseX <= x0 + w;
-      const doyUnderCursor = inXRange ? this._doyFromX(this.p.mouseX, x0, w) : null;
+      const overViz =
+        this.p.mouseX >= x0 + 20 &&
+        this.p.mouseX <= x0 + 20 + w &&
+        this.p.mouseY >= timelineY - 100 &&
+        this.p.mouseY <= timelineY + 40;
+
+      const doyUnderCursor = overViz
+        ? this._doyFromX(this.p.mouseX, x0, w)
+        : null;
 
       const activeMs =
         doyUnderCursor != null ? this._nearestMilestone(doyUnderCursor) : null;
-      this._drawMilestonesSelective(x0, timelineY, w, activeMs);
 
-      const bloomHover = this._drawBloomPlot(x0, plotTop, w, plotH);
+      this._drawMilestonesSelective(x0, timelineY, w, activeMs);
 
       const inspector = this._getInspectorTarget(
         x0,
         timelineY,
         w,
-        plotTop,
-        plotH,
         activeMs,
-        bloomHover,
         doyUnderCursor
       );
 
@@ -228,81 +206,6 @@
         this.p.cursor(this.p.CROSS);
       } else {
         this.p.cursor(this.p.ARROW);
-      }
-
-      this.p.noStroke();
-      this.p.fill(90);
-      this.p.textSize(11);
-      this.p.textAlign(this.p.LEFT, this.p.TOP);
-
-      if (this._dataError) {
-        this.p.text(`CSV load error: ${this._dataError}`, x0, H - 22);
-      } else if (!this._dataLoaded) {
-        this.p.text("Loading bloom data from dates.csv...", x0, H - 22);
-      }
-    },
-
-    _loadBloomDataFromCSV: async function () {
-      try {
-        const res = await fetch(this.CFG.dataPath);
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-
-        const text = await res.text();
-        const rows = text
-          .trim()
-          .split(/\r?\n/)
-          .map(r => r.trim())
-          .filter(Boolean);
-
-        if (!rows.length) {
-          throw new Error("CSV is empty");
-        }
-
-        const splitCSVRow = (row) => {
-          return row.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
-        };
-
-        const header = splitCSVRow(rows[0]).map(s =>
-          s.replace(/^"|"$/g, "").trim().toUpperCase()
-        );
-
-        const yearIdx = header.indexOf("YEAR");
-        const bloomIdx = header.indexOf("BLOOMDAY");
-
-        if (yearIdx === -1) throw new Error('Could not find "YEAR" column');
-        if (bloomIdx === -1) throw new Error('Could not find "BLOOMDAY" column');
-
-        const parsed = [];
-        const minYear = this.CFG.yearMin;
-        const maxYear = this.CFG.yearMax;
-
-        for (let i = 1; i < rows.length; i++) {
-          const cols = splitCSVRow(rows[i]).map(s =>
-            s.replace(/^"|"$/g, "").trim()
-          );
-
-          const year = Number(cols[yearIdx]);
-          const doy = Number(cols[bloomIdx]);
-
-          if (!Number.isFinite(year) || !Number.isFinite(doy)) continue;
-          if (Number.isFinite(minYear) && year < minYear) continue;
-          if (Number.isFinite(maxYear) && year > maxYear) continue;
-
-          parsed.push({
-            year: year,
-            doy: doy
-          });
-        }
-
-        this.state.bloomData = parsed;
-        this._dataLoaded = true;
-        this._dataError = null;
-      } catch (err) {
-        this._dataError = err.message || String(err);
-        this._dataLoaded = false;
-        console.error("Failed to load bloom CSV:", err);
       }
     },
 
@@ -354,76 +257,25 @@
       ms.sort((a, b) => a.doy - b.doy);
     },
 
-    _getInspectorTarget: function (
-      x,
-      timelineY,
-      w,
-      plotTop,
-      plotH,
-      activeMs,
-      bloomHover,
-      doyUnderCursor
-    ) {
+    _getInspectorTarget: function (x, timelineY, w, activeMs, doyUnderCursor) {
       const p = this.p;
-      const cfg = this.CFG;
 
-      if (p.mouseX < x || p.mouseX > x + w) return null;
-
-      const avg = this._averageDOY(this.state.bloomData);
-      const avgX = this._xFromDOY(avg, x, w);
-
-      const inBloomPlot =
-        p.mouseY >= plotTop &&
-        p.mouseY <= plotTop + plotH &&
+      const overViz =
         p.mouseX >= x &&
-        p.mouseX <= x + w;
+        p.mouseX <= x + w &&
+        p.mouseY >= timelineY - 120 &&
+        p.mouseY <= timelineY + 40;
 
-      if (bloomHover) {
+      if (!overViz) return null;
+
+      if (doyUnderCursor != null && activeMs) {
         return {
-          kind: "bloom",
-          x: bloomHover.px,
-          y: bloomHover.py,
-          title: `Bloom day: ${bloomHover.year}`,
-          body:
-            `DOY: ${bloomHover.doy}\n` +
-            `Approx date: ${this._doyToMonthDay(bloomHover.doy)}\n` +
-            `Δ vs avg: ${p.nf(bloomHover.doy - avg, 0, 1)} days`
+          kind: "milestone",
+          x: this._xFromDOY(activeMs.doy, x, w),
+          y: this._milestoneYFor(activeMs.name, timelineY),
+          title: `${activeMs.name} (${this._doyToMonthDay(activeMs.doy)})`,
+          body: activeMs.desc
         };
-      }
-
-      if (inBloomPlot) {
-        const distToAvgLine = Math.abs(p.mouseX - avgX);
-        if (distToAvgLine <= cfg.avgHoverPx) {
-          return {
-            kind: "avg",
-            x: avgX,
-            y: plotTop + plotH - 10,
-            title: "Average bloom day",
-            body:
-              `Mean DOY: ${p.nf(avg, 0, 1)}\n` +
-              `Approx date: ${this._doyToMonthDay(avg)}`
-          };
-        }
-        return null;
-      }
-
-      const timelineZoneTop = timelineY - 140;
-      const timelineZoneBot = timelineY + 55;
-
-      if (
-        p.mouseY >= timelineZoneTop &&
-        p.mouseY <= timelineZoneBot &&
-        doyUnderCursor != null
-      ) {
-        if (activeMs) {
-          return {
-            kind: "milestone",
-            x: this._xFromDOY(activeMs.doy, x, w),
-            y: this._milestoneYFor(activeMs.name, timelineY),
-            title: `${activeMs.name} (${this._doyToMonthDay(activeMs.doy)})`,
-            body: activeMs.desc
-          };
-        }
       }
 
       return null;
@@ -448,7 +300,7 @@
 
       p.stroke(30);
       p.strokeWeight(2);
-      p.line(x, y, x + w, y);
+      p.line(x, y, x + w-45, y);
 
       for (let i = 0; i < cfg.monthTicks.length; i++) {
         const mt = cfg.monthTicks[i];
@@ -503,37 +355,56 @@
     },
 
     _milestoneYFor: function (name, timelineY) {
-      const base = timelineY - 78;
+      const base = timelineY - 82;
 
-      if (name === "Dormancy") return base - 26;
-      if (name === "Bud swell") return base + 18;
+      if (name === "Dormancy") return base - 10;
+      if (name === "Bud swell") return base + 22;
 
-      if (name === "First bloom") return base - 42;
-      if (name === "Peak bloom") return base - 6;
+      if (name === "First bloom") return base - 38;
+      if (name === "Peak bloom") return base - 2;
       if (name === "Late bloom") return base + 30;
 
-      if (name === "Leaf-out") return base - 24;
+      if (name === "Leaf-out") return base - 14;
       if (name === "Summer canopy") return base + 18;
-      if (name === "Fall color") return base - 24;
+      if (name === "Fall color") return base - 14;
       if (name === "Leaf drop") return base + 18;
 
       return base;
     },
 
-    _labelYFor: function (name, iconY) {
-      if (name === "Dormancy") return iconY + 10;
-      if (name === "Bud swell") return iconY + 34;
+    _bottomLabelYFor: function (name, timelineY) {
+      const row1 = timelineY + 78;
+      const row2 = timelineY + 106;
+      const row3 = timelineY + 134;
 
-      if (name === "First bloom") return iconY + 6;
-      if (name === "Peak bloom") return iconY + 28;
-      if (name === "Late bloom") return iconY + 50;
+      if (name === "Dormancy") return row1;
+      if (name === "Bud swell") return row2;
 
-      if (name === "Leaf-out") return iconY + 10;
-      if (name === "Summer canopy") return iconY + 34;
-      if (name === "Fall color") return iconY + 10;
-      if (name === "Leaf drop") return iconY + 34;
+      if (name === "First bloom") return row1;
+      if (name === "Peak bloom") return row3;
+      if (name === "Late bloom") return row1;
 
-      return iconY + 22;
+      if (name === "Leaf-out") return row2;
+      if (name === "Summer canopy") return row1;
+      if (name === "Fall color") return row1;
+      if (name === "Leaf drop") return row2;
+
+      return row1;
+    },
+
+    _bottomLabelXFor: function (name, px) {
+      if (name === "Bud swell") return px - 6;
+
+      if (name === "First bloom") return px - 12;
+      if (name === "Peak bloom") return px;
+      if (name === "Late bloom") return px + 10;
+      if (name === "Leaf-out") return px + 12;
+
+      return px;
+    },
+
+    _labelTextFor: function (name) {
+      return name;
     },
 
     _drawMilestonesSelective: function (x, timelineY, w, activeMs) {
@@ -544,148 +415,25 @@
         const m = ms[i];
         const px = this._xFromDOY(m.doy, x, w);
         const py = this._milestoneYFor(m.name, timelineY);
-        const labelY = this._labelYFor(m.name, py);
 
-        p.stroke(170);
+        const labelX = this._bottomLabelXFor(m.name, px);
+        const labelY = this._bottomLabelYFor(m.name, timelineY);
+
+        // keep only the bottom connector line
+        p.stroke(185);
         p.strokeWeight(1);
-        p.line(px, timelineY - 8, px, py + 16);
+        p.line(px, timelineY + 10, px, labelY - 6);
 
         p.noStroke();
         p.fill(40);
-        p.textSize(10);
+        p.textSize(8);
         p.textAlign(p.CENTER, p.TOP);
-        p.text(m.name, px, labelY);
+        p.text(this._labelTextFor(m.name), labelX, labelY);
 
         if (activeMs && m === activeMs) {
           this._drawIcon(m.iconType, px, py, 16);
         }
       }
-    },
-
-    _drawBloomPlot: function (x, plotTop, w, plotH) {
-      const p = this.p;
-      const cfg = this.CFG;
-
-      const data = this.state.bloomData;
-      const avg = this._averageDOY(data);
-
-      p.noFill();
-      p.stroke(220);
-      p.rect(x, plotTop, w, plotH, 14);
-
-      p.noStroke();
-      p.fill(90);
-      p.textAlign(p.LEFT, p.TOP);
-      p.textSize(12);
-      p.text("Bloom day each year (DOY)", x + 14, plotTop + 10);
-
-      p.stroke(235);
-      for (let i = 0; i <= 4; i++) {
-        const gy = plotTop + 34 + (i * (plotH - 55)) / 4;
-        p.line(x + 12, gy, x + w - 12, gy);
-      }
-
-      if (!data.length) return null;
-
-      const years = data.map(d => d.year);
-      const minY = Math.min.apply(null, years);
-      const maxY = Math.max.apply(null, years);
-
-      const yForYear = (year) => {
-        return (minY === maxY)
-          ? plotTop + plotH / 2
-          : p.map(year, minY, maxY, plotTop + plotH - 26, plotTop + 56);
-      };
-
-      const firstTick = Math.ceil(minY / 5) * 5;
-
-      p.stroke(210);
-      p.strokeWeight(1);
-      p.line(x, plotTop + 42, x, plotTop + plotH - 18);
-
-      p.noStroke();
-      p.fill(80);
-      p.textSize(10);
-      p.textAlign(p.RIGHT, p.CENTER);
-
-      for (let yr = firstTick; yr <= maxY; yr += 5) {
-        const ty = yForYear(yr);
-
-        p.stroke(210);
-        p.strokeWeight(1);
-        p.line(x - 6, ty, x, ty);
-
-        p.noStroke();
-        p.fill(80);
-        p.text(yr, x - 10, ty);
-      }
-
-      const avgX = this._xFromDOY(avg, x, w);
-      this._drawAverageMarkerBottom(avgX, plotTop, plotH, avg);
-
-      let nearest = null;
-      let bestDist = Infinity;
-
-      for (let i = 0; i < data.length; i++) {
-        const d = data[i];
-        const px = this._xFromDOY(d.doy, x, w);
-        const py = yForYear(d.year);
-        const dd = p.dist(p.mouseX, p.mouseY, px, py);
-
-        if (dd < bestDist) {
-          bestDist = dd;
-          nearest = { year: d.year, doy: d.doy, px, py };
-        }
-      }
-
-      const highlight = bestDist <= cfg.highlightRadius ? nearest : null;
-
-      for (let i = 0; i < data.length; i++) {
-        const d = data[i];
-        const px = this._xFromDOY(d.doy, x, w);
-        const py = yForYear(d.year);
-
-        const isHi = highlight && d.year === highlight.year;
-        const early = d.doy < avg;
-
-        p.noStroke();
-        if (isHi) {
-          p.fill(40);
-          p.circle(px, py, 14);
-          p.fill(early ? 240 : 170, 100, 160, 230);
-          p.circle(px, py, 10);
-        } else {
-          p.fill(early ? 220 : 120, 80, 140, 90);
-          p.circle(px, py, 8);
-        }
-      }
-
-      return highlight;
-    },
-
-    _drawAverageMarkerBottom: function (avgX, plotTop, plotH, avg) {
-      const p = this.p;
-
-      p.stroke(60);
-      p.strokeWeight(1.5);
-      p.line(avgX, plotTop + 40, avgX, plotTop + plotH - 6);
-
-      p.noStroke();
-      p.fill(60);
-      p.textAlign(p.CENTER, p.BOTTOM);
-      p.textSize(11);
-      p.text("avg", avgX, plotTop + plotH - 38);
-
-      p.fill(255);
-      p.stroke(60);
-      p.strokeWeight(1);
-      p.rectMode(p.CENTER);
-      p.rect(avgX, plotTop + plotH - 6, 110, 22, 8);
-      p.noStroke();
-      p.fill(40);
-      p.textAlign(p.CENTER, p.CENTER);
-      p.text(this._doyToMonthDay(avg), avgX, plotTop + plotH - 6);
-      p.rectMode(p.CORNER);
     },
 
     _drawTooltipAt: function (mx, my, title, body) {
@@ -833,13 +581,6 @@
         }
       }
       return best;
-    },
-
-    _averageDOY: function (arr) {
-      if (!arr.length) return 0;
-      let s = 0;
-      for (let i = 0; i < arr.length; i++) s += arr[i].doy;
-      return s / arr.length;
     },
 
     _xFromDOY: function (doy, x, w) {

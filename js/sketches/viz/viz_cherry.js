@@ -1,16 +1,8 @@
-// viz_cherry.js
-// Cherry Blossom Ridgeline — real data source, same overall look
-// Loads YEAR / BLOOMDAY from CSV instead of mock random years
-// Pink trees are back, but fully static (no flicker)
-// Data is bucketed into 5 averaged ridges total
-// X-axis is cropped to Feb–Jun, and ridges are staggered more so peaks separate visually
-// Year labels moved to the right side of the graph
-
 (function () {
   const CFG = {
     csvPath: "data/Maust_et_al_data/blossom_dates.csv",
 
-    margin: { top: 10, right: 160, bottom: 90, left: 50 },
+    margin: { top: 10, right: 160, bottom: 50, left: 50 },
 
     years: [],
 
@@ -119,7 +111,6 @@
     }
   };
 
-  // ---------- data loading ----------
   function ensureDataLoaded(p, manager) {
     if (manager._cherryDataLoaded || manager._cherryDataLoading || manager._cherryLoadError) {
       return;
@@ -156,7 +147,6 @@
     );
   }
 
-  // ---------- cache builder ----------
   function buildCache(p, w, h, rows) {
     const plot = makePlot(w, h);
     const ridges = regenerateRidgesFromData(rows);
@@ -269,7 +259,6 @@
     return buckets;
   }
 
-  // ---------- drawing ----------
   function drawTitle(p, plot) {
     p.noStroke();
     p.fill(30);
@@ -442,7 +431,6 @@
     }
   }
 
-  // ---------- static trees ----------
   function buildStaticTrees(values, peakMonth, count, seed) {
     if (!count) return [];
 
@@ -555,7 +543,6 @@
     };
   }
 
-  // ---------- helpers ----------
   function proj(x, y, z) {
     return { x: x + z * CFG.zDX, y: y + z * CFG.zDY };
   }
