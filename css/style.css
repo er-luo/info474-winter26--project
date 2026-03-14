@@ -102,3 +102,33 @@ body {
   stroke: #000;
   stroke-width: 4px;
 }
+
+.step.text-only {
+  width: 620px;
+  max-width: 90vw;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.vis-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 500ms ease-in-out;
+}
+
+.vis-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 500ms ease-in-out;
+}
+
+.page-title {
+  text-align: center;
+  font-family: "TiemposTextWeb-Regular", Georgia, serif;
+  font-size: 36px;
+  font-weight: bold;
+  color: #262626;
+  margin-top: 40px;
+  margin-bottom: 30px;
+  letter-spacing: 0.5px;
+}

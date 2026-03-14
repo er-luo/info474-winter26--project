@@ -112,7 +112,18 @@
                         }
 
                         // let visual controller decide whether to show/hide (give it the mapped index)
-                        if (visualController) visualController.handleActive(mappedIndex);
+                        var visEl = document.querySelector(cfg.visSelector);
+
+                        if (mappedIndex === 2 || mappedIndex === 3 ||mappedIndex === 10 || mappedIndex === 11) {
+                            if (visEl) {
+                                visEl.classList.remove(cfg.visVisibleClass);
+                                visEl.classList.add(cfg.visHiddenClass);
+                            }
+                        } else {
+                            if (visEl) {
+                            }
+                            if (visualController) visualController.handleActive(mappedIndex);
+                        }
                     });
 
                     sc.on('progress', function (index, progress) {
