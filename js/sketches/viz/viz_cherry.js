@@ -2,7 +2,7 @@
   const CFG = {
     csvPath: "data/Maust_et_al_data/blossom_dates.csv",
 
-    margin: { top: 0, right: 170, bottom: 58, left: 55 },
+    margin: { top: 0, right: 250, bottom: 0, left: 0 },
 
     years: [],
 
